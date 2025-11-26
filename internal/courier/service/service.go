@@ -7,18 +7,11 @@ import (
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
 )
 
-type CourierService interface {
-	Create(ctx context.Context, c *model.Courier) error
-	GetByID(ctx context.Context, id int64) (*model.Courier, error)
-	GetAll(ctx context.Context) ([]*model.Courier, error)
-	Update(ctx context.Context, c *model.Courier) error
-}
-
 type courierService struct {
 	repo repository.CourierRepository
 }
 
-func NewCourierService(repo repository.CourierRepository) CourierService {
+func NewCourierService(repo repository.CourierRepository) *courierService {
 	return &courierService{repo: repo}
 }
 

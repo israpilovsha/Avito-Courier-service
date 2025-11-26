@@ -1,20 +1,27 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/model"
-	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/service"
 	"github.com/gorilla/mux"
 )
 
-type Handler struct {
-	service service.CourierService
+type CourierService interface {
+	Create(ctx context.Context, c *model.Courier) error
+	GetByID(ctx context.Context, id int64) (*model.Courier, error)
+	GetAll(ctx context.Context) ([]*model.Courier, error)
+	Update(ctx context.Context, c *model.Courier) error
 }
 
-func NewHandler(s service.CourierService) *Handler {
+type Handler struct {
+	service CourierService
+}
+
+func NewHandler(s CourierService) *Handler {
 	return &Handler{service: s}
 }
 

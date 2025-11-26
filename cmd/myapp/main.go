@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
@@ -10,7 +12,6 @@ import (
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/service"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/db"
-	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/server"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/server/config"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/pkg/logger"
 	"github.com/gorilla/mux"
@@ -29,14 +30,17 @@ func main() {
 	r := mux.NewRouter()
 	handler.RegisterCourierRoutes(r, h)
 
-	srv := server.New(cfg.Port, r)
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%s", cfg.Port),
+		Handler: r,
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
 		log.Printf("Server is running on :%s", cfg.Port)
-		if err := srv.Start(); err != nil && err != context.Canceled {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
 	}()
