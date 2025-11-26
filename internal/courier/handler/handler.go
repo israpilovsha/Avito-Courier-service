@@ -18,9 +18,32 @@ func NewHandler(s service.CourierService) *Handler {
 	return &Handler{service: s}
 }
 
-func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+const (
+	ErrInvalidID        = "invalid id"
+	ErrInvalidBody      = "invalid request body"
+	ErrNotFound         = "not found"
+	ErrInternal         = "internal error"
+	ErrConflict         = "resource conflict"
+	ErrJSONEncodeFailed = "failed to encode json"
+)
+
+// отправка статус кода, ответа и установку заголовков в отдельную функцию, дабы избежать дублирования
+func respondJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "pong"})
+	w.WriteHeader(status)
+	if payload != nil {
+		if err := json.NewEncoder(w).Encode(payload); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		}
+	}
+}
+
+func respondError(w http.ResponseWriter, status int, msg string) {
+	respondJSON(w, status, map[string]string{"error": msg})
+}
+
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]string{"message": "pong"})
 }
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -31,55 +54,51 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, ErrInvalidID)
 		return
 	}
 
 	c, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		respondError(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(c)
+	respondJSON(w, http.StatusOK, c)
 }
 
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	couriers, err := h.service.GetAll(r.Context())
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, ErrInternal)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(couriers)
+	respondJSON(w, http.StatusOK, couriers)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var c model.Courier
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, ErrInvalidBody)
 		return
 	}
 	if err := h.service.Create(r.Context(), &c); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		respondError(w, http.StatusConflict, ErrConflict)
+
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(c)
+	respondJSON(w, http.StatusOK, c)
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var c model.Courier
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, ErrInvalidBody)
 		return
 	}
 	if err := h.service.Update(r.Context(), &c); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		respondError(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(c)
+	respondJSON(w, http.StatusOK, c)
 }
