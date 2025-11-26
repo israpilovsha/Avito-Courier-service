@@ -27,7 +27,7 @@ func main() {
 	h := handler.NewHandler(svc)
 
 	r := mux.NewRouter()
-	h.RegisterRoutes(r)
+	handler.RegisterCourierRoutes(r, h)
 
 	srv := server.New(cfg.Port, r)
 
