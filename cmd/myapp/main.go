@@ -15,12 +15,17 @@ import (
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/server/config"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/pkg/logger"
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 func main() {
 	log := logger.New()
+	defer log.Sync()
+
 	cfg := config.MustLoad()
-	database := db.New(cfg.Postgres.DSN())
+	log.Info("Configuration loaded", zap.String("port", cfg.Port))
+
+	database := db.New(cfg.Postgres.DSN(), log)
 	defer database.Close()
 
 	repo := repository.NewPostgresCourierRepository(database)
@@ -39,21 +44,21 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("Server is running on :%s", cfg.Port)
+		log.Info("Server is starting...", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server failed: %v", err)
+			log.Fatal("Server failed", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("Shutting down gracefully...")
+	log.Info("Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("server shutdown failed: %v", err)
+		log.Fatal("Server shutdown failed", zap.Error(err))
 	}
 
-	log.Println("Server stopped.")
+	log.Info("Server stopped gracefully")
 }

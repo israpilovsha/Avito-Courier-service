@@ -1,10 +1,11 @@
 package logger
 
-import (
-	"log"
-	"os"
-)
+import "go.uber.org/zap"
 
-func New() *log.Logger {
-	return log.New(os.Stdout, "", log.LstdFlags)
+func New() *zap.SugaredLogger {
+	logger, err := zap.NewProduction()
+	if err != nil {
+		panic("failed to initialize logger: " + err.Error())
+	}
+	return logger.Sugar()
 }
