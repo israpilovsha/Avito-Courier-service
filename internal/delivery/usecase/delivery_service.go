@@ -25,20 +25,20 @@ func NewDeliveryService(c courierRepo.CourierRepository, d deliveryRepo.Delivery
 }
 
 func (s *DeliveryService) Assign(ctx context.Context, orderID string) (*deliveryModel.Delivery, *courierModel.Courier, error) {
-	var delivery *deliveryModel.Delivery
-	var courier *courierModel.Courier
+	c, err := s.courierRepo.FindAvailable(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if c == nil {
+		return nil, nil, courierRepo.ErrNotFound
+	}
 
-	err := s.deliveryRepo.WithTx(ctx, func(txCtx context.Context) error {
-		c, err := s.courierRepo.FindAvailable(txCtx)
-		if err != nil {
-			return err
-		}
-		if c == nil {
-			return courierRepo.ErrNotFound
-		}
-		courier = c
+	var delivery *deliveryModel.Delivery
+
+	err = s.deliveryRepo.WithTx(ctx, func(txCtx context.Context) error {
 
 		now := s.nowFunc()
+
 		delivery = &deliveryModel.Delivery{
 			CourierID:  c.ID,
 			OrderID:    orderID,
@@ -61,7 +61,7 @@ func (s *DeliveryService) Assign(ctx context.Context, orderID string) (*delivery
 		return nil, nil, err
 	}
 
-	return delivery, courier, nil
+	return delivery, c, nil
 }
 
 func (s *DeliveryService) Unassign(ctx context.Context, orderID string) (*deliveryModel.Delivery, error) {
