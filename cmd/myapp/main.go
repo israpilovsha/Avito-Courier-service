@@ -34,8 +34,8 @@ func main() {
 	database := db.New(cfg.Postgres.DSN(), log)
 	defer database.Close()
 
-	courierRepository := courierRepo.NewPostgresCourierRepository(database)
-	deliveryRepository := deliveryRepo.NewDeliveryPostgresRepository(database)
+	courierRepository := courierRepo.NewCourierRepository(database)
+	deliveryRepository := deliveryRepo.NewDeliveryRepository(database)
 
 	courierService := courierUsecase.NewCourierService(courierRepository)
 	deliveryService := deliveryUsecase.NewDeliveryService(courierRepository, deliveryRepository)
@@ -48,12 +48,17 @@ func main() {
 	courierHandler.RegisterCourierRoutes(r, courierH)
 	deliveryHandler.RegisterDeliveryRoutes(r, deliveryH)
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go deliveryService.StartAutoRelease(ctx, cfg.Delivery.TickerInterval)
+	log.Info("Background auto-release task started")
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {

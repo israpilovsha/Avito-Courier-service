@@ -16,7 +16,7 @@ type DeliveryPostgresRepository struct {
 	DB *db.Database
 }
 
-func NewDeliveryPostgresRepository(db *db.Database) *DeliveryPostgresRepository {
+func NewDeliveryRepository(db *db.Database) *DeliveryPostgresRepository {
 	return &DeliveryPostgresRepository{DB: db}
 }
 

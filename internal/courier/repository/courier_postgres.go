@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/model"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/db"
@@ -17,7 +18,7 @@ type PostgresCourierRepository struct {
 	DB *db.Database
 }
 
-func NewPostgresCourierRepository(db *db.Database) *PostgresCourierRepository {
+func NewCourierRepository(db *db.Database) *PostgresCourierRepository {
 	return &PostgresCourierRepository{DB: db}
 }
 
@@ -121,10 +122,13 @@ func (r *PostgresCourierRepository) Update(ctx context.Context, c *model.Courier
 
 func (r *PostgresCourierRepository) FindAvailable(ctx context.Context) (*model.Courier, error) {
 	query := `
-        SELECT id, name, phone, status, transport_type
-        FROM couriers
-        WHERE status = 'available'
-        ORDER BY id LIMIT 1;
+        SELECT c.id, c.name, c.phone, c.status, c.transport_type
+        FROM couriers c
+        LEFT JOIN delivery d ON d.courier_id = c.id
+        WHERE c.status = 'available'
+        GROUP BY c.id, c.name, c.phone, c.status, c.transport_type
+        ORDER BY COUNT(d.id) ASC, c.id ASC
+        LIMIT 1;
     `
 
 	c := &model.Courier{}
@@ -153,4 +157,22 @@ func (r *PostgresCourierRepository) UpdateStatus(ctx context.Context, id int64, 
 
 	_, err := r.DB.Pool.Exec(ctx, query, id, status)
 	return err
+}
+
+func (r *PostgresCourierRepository) ReleaseExpired(ctx context.Context, now time.Time) (int64, error) {
+	const query = `
+        UPDATE couriers c
+        SET status = 'available'
+        FROM delivery d
+        WHERE c.id = d.courier_id
+          AND c.status = 'busy'
+          AND d.deadline < $1;
+    `
+
+	cmd, err := r.DB.Pool.Exec(ctx, query, now)
+	if err != nil {
+		return 0, err
+	}
+
+	return cmd.RowsAffected(), nil
 }

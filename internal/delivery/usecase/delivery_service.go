@@ -34,7 +34,6 @@ func (s *DeliveryService) Assign(ctx context.Context, orderID string) (*delivery
 			return err
 		}
 		if c == nil {
-			// нет доступных курьеров
 			return courierRepo.ErrNotFound
 		}
 		courier = c
@@ -87,4 +86,25 @@ func (s *DeliveryService) Unassign(ctx context.Context, orderID string) (*delive
 	}
 
 	return result, nil
+}
+
+// ReleaseExpired проверяет просроченные заказы и освобождает курьеров
+func (s *DeliveryService) ReleaseExpired(ctx context.Context) error {
+	now := s.nowFunc()
+	_, err := s.courierRepo.ReleaseExpired(ctx, now)
+	return err
+}
+
+// StartAutoRelease — фоновая задача
+func (s *DeliveryService) StartAutoRelease(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = s.ReleaseExpired(ctx)
+		}
+	}
 }

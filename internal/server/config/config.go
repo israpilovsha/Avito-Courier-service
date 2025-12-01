@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -11,6 +12,7 @@ import (
 type Config struct {
 	Port     string
 	Postgres PostgresConfig
+	Delivery DeliveryConfig
 }
 
 type PostgresConfig struct {
@@ -21,10 +23,25 @@ type PostgresConfig struct {
 	DBName   string
 }
 
+type DeliveryConfig struct {
+	TickerInterval time.Duration
+}
+
 func MustLoad() *Config {
 	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
+
+	tickerRaw := os.Getenv("DELIVERY_TICKER_INTERVAL")
+	if tickerRaw == "" {
+		tickerRaw = "10s"
+	}
+
+	tickerInterval, err := time.ParseDuration(tickerRaw)
+	if err != nil {
+		panic("invalid DELIVERY_TICKER_INTERVAL: " + err.Error())
+	}
+
 	pg := PostgresConfig{
 		Host:     os.Getenv("POSTGRES_HOST"),
 		Port:     os.Getenv("POSTGRES_PORT"),
@@ -43,6 +60,7 @@ func MustLoad() *Config {
 	return &Config{
 		Port:     port,
 		Postgres: pg,
+		Delivery: DeliveryConfig{TickerInterval: tickerInterval},
 	}
 }
 

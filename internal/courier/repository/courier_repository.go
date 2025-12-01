@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/model"
 )
@@ -13,6 +14,7 @@ type CourierRepository interface {
 	Update(ctx context.Context, c *model.Courier) error
 	FindAvailable(ctx context.Context) (*model.Courier, error)
 	UpdateStatus(ctx context.Context, id int64, status string) error
+	ReleaseExpired(ctx context.Context, now time.Time) (int64, error)
 }
 
 var (
