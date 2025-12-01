@@ -5,6 +5,7 @@ CREATE TABLE couriers (
     name        TEXT NOT NULL,
     phone       TEXT NOT NULL UNIQUE,
     status      TEXT NOT NULL, -- например: 'available', 'busy', 'paused'
+    transport_type TEXT NOT NULL DEFAULT 'on_foot',
     created_at  TIMESTAMP DEFAULT now(),
     updated_at  TIMESTAMP DEFAULT now()
 );

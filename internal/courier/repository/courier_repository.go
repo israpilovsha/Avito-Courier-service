@@ -11,6 +11,8 @@ type CourierRepository interface {
 	GetByID(ctx context.Context, id int64) (*model.Courier, error)
 	GetAll(ctx context.Context) ([]*model.Courier, error)
 	Update(ctx context.Context, c *model.Courier) error
+	FindAvailable(ctx context.Context) (*model.Courier, error)
+	UpdateStatus(ctx context.Context, id int64, status string) error
 }
 
 var (

@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/model"
+	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
@@ -23,8 +25,8 @@ type Handler struct {
 	log     *zap.SugaredLogger
 }
 
-func NewHandler(s CourierService) *Handler {
-	return &Handler{service: s}
+func NewHandler(s CourierService, log *zap.SugaredLogger) *Handler {
+	return &Handler{service: s, log: log}
 }
 
 const (
@@ -103,13 +105,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, ErrInvalidBody)
 		return
 	}
-	if err := h.service.Create(r.Context(), &c); err != nil {
+
+	err := h.service.Create(r.Context(), &c)
+	if err != nil {
 		h.log.Warnf("Create failed: %v", err)
-		respondError(w, http.StatusConflict, ErrConflict)
+
+		if errors.Is(err, repository.ErrConflict) {
+			respondError(w, http.StatusConflict, ErrConflict)
+			return
+		}
+
+		respondError(w, http.StatusInternalServerError, ErrInternal)
 		return
 	}
+
 	h.log.Infof("Courier created: ID=%d", c.ID)
-	respondJSON(w, http.StatusOK, c)
+	respondJSON(w, http.StatusCreated, c)
 }
 
 // Update обновляет курьера

@@ -21,7 +21,6 @@ type PostgresConfig struct {
 	DBName   string
 }
 
-// MustLoad загружает конфигурацию из .env
 func MustLoad() *Config {
 	_ = godotenv.Load()
 
@@ -37,7 +36,7 @@ func MustLoad() *Config {
 	flag.StringVar(&port, "port", port, "Server port")
 	flag.Parse()
 
-	if port == "" { //дефолтный порт
+	if port == "" {
 		port = "8080"
 	}
 
