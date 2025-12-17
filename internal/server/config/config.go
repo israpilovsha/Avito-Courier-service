@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	Port     string
-	Postgres PostgresConfig
-	Delivery DeliveryConfig
+	Port             string
+	OrderServiceHost string
+	Postgres         PostgresConfig
+	Delivery         DeliveryConfig
 }
 
 type PostgresConfig struct {
@@ -31,6 +32,7 @@ func MustLoad() *Config {
 	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
+	orderServiceHost := os.Getenv("ORDER_SERVICE_HOST")
 
 	tickerRaw := os.Getenv("DELIVERY_TICKER_INTERVAL")
 	if tickerRaw == "" {
@@ -57,10 +59,15 @@ func MustLoad() *Config {
 		port = "8080"
 	}
 
+	if orderServiceHost == "" {
+		panic("ORDER_SERVICE_HOST is required")
+	}
+
 	return &Config{
-		Port:     port,
-		Postgres: pg,
-		Delivery: DeliveryConfig{TickerInterval: tickerInterval},
+		Port:             port,
+		OrderServiceHost: os.Getenv("ORDER_SERVICE_HOST"),
+		Postgres:         pg,
+		Delivery:         DeliveryConfig{TickerInterval: tickerInterval},
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 	deliveryHandler "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/handler"
 	deliveryRepo "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/repository"
 	deliveryUsecase "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/usecase"
+	orderGateway "github.com/Avito-courses/course-go-avito-israpilovsha/internal/gateway/order"
+	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/worker"
 
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/db"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/server/config"
@@ -38,13 +40,15 @@ func main() {
 	deliveryRepository := deliveryRepo.NewDeliveryRepository(database)
 
 	courierService := courierUsecase.NewCourierService(courierRepository)
-	deliveryService := deliveryUsecase.NewDeliveryService(courierRepository, deliveryRepository)
+	deliveryService := deliveryUsecase.NewDeliveryService(
+		courierRepository,
+		deliveryRepository,
+	)
 
 	courierH := courierHandler.NewHandler(courierService, log)
 	deliveryH := deliveryHandler.NewHandler(deliveryService, log)
 
 	r := mux.NewRouter()
-
 	courierHandler.RegisterCourierRoutes(r, courierH)
 	deliveryHandler.RegisterDeliveryRoutes(r, deliveryH)
 
@@ -54,12 +58,16 @@ func main() {
 	go deliveryService.StartAutoRelease(ctx, cfg.Delivery.TickerInterval)
 	log.Info("Background auto-release task started")
 
+	orderGW := orderGateway.NewHTTPGateway(cfg.OrderServiceHost)
+	orderFetcher := worker.NewOrderFetcher(orderGW, deliveryService, log)
+
+	go orderFetcher.Run(ctx)
+	log.Info("Background order fetcher started")
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
 	}
-
-	defer stop()
 
 	go func() {
 		log.Info("Server is starting...", zap.String("addr", srv.Addr))
