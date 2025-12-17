@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -11,6 +12,7 @@ import (
 type Config struct {
 	Port     string
 	Postgres PostgresConfig
+	Delivery DeliveryConfig
 }
 
 type PostgresConfig struct {
@@ -21,11 +23,25 @@ type PostgresConfig struct {
 	DBName   string
 }
 
-// MustLoad загружает конфигурацию из .env
+type DeliveryConfig struct {
+	TickerInterval time.Duration
+}
+
 func MustLoad() *Config {
 	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
+
+	tickerRaw := os.Getenv("DELIVERY_TICKER_INTERVAL")
+	if tickerRaw == "" {
+		tickerRaw = "10s"
+	}
+
+	tickerInterval, err := time.ParseDuration(tickerRaw)
+	if err != nil {
+		panic("invalid DELIVERY_TICKER_INTERVAL: " + err.Error())
+	}
+
 	pg := PostgresConfig{
 		Host:     os.Getenv("POSTGRES_HOST"),
 		Port:     os.Getenv("POSTGRES_PORT"),
@@ -37,13 +53,14 @@ func MustLoad() *Config {
 	flag.StringVar(&port, "port", port, "Server port")
 	flag.Parse()
 
-	if port == "" { //дефолтный порт
+	if port == "" {
 		port = "8080"
 	}
 
 	return &Config{
 		Port:     port,
 		Postgres: pg,
+		Delivery: DeliveryConfig{TickerInterval: tickerInterval},
 	}
 }
 

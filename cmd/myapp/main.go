@@ -8,12 +8,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/handler"
-	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
-	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/service"
+	courierHandler "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/handler"
+	courierRepo "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
+	courierUsecase "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/usecase"
+
+	deliveryHandler "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/handler"
+	deliveryRepo "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/repository"
+	deliveryUsecase "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/usecase"
+
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/db"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/server/config"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/pkg/logger"
+
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
@@ -28,19 +34,31 @@ func main() {
 	database := db.New(cfg.Postgres.DSN(), log)
 	defer database.Close()
 
-	repo := repository.NewPostgresCourierRepository(database)
-	svc := service.NewCourierService(repo)
-	h := handler.NewHandler(svc)
+	courierRepository := courierRepo.NewCourierRepository(database)
+	deliveryRepository := deliveryRepo.NewDeliveryRepository(database)
+
+	courierService := courierUsecase.NewCourierService(courierRepository)
+	deliveryService := deliveryUsecase.NewDeliveryService(courierRepository, deliveryRepository)
+
+	courierH := courierHandler.NewHandler(courierService, log)
+	deliveryH := deliveryHandler.NewHandler(deliveryService, log)
 
 	r := mux.NewRouter()
-	handler.RegisterCourierRoutes(r, h)
+
+	courierHandler.RegisterCourierRoutes(r, courierH)
+	deliveryHandler.RegisterDeliveryRoutes(r, deliveryH)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go deliveryService.StartAutoRelease(ctx, cfg.Delivery.TickerInterval)
+	log.Info("Background auto-release task started")
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
