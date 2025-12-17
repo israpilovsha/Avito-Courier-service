@@ -36,184 +36,249 @@ func (m *mockCourierService) Update(ctx context.Context, c *model.Courier) error
 	return m.UpdateFn(ctx, c)
 }
 
-func muxSetVar(req *http.Request, key, value string) *http.Request {
-	ctx := context.WithValue(req.Context(), "mux.vars", map[string]string{
-		key: value,
-	})
-	return req.WithContext(ctx)
-}
-
-func TestGetByID_Success(t *testing.T) {
+func TestCourierHandler_GetByID(t *testing.T) {
 	t.Parallel()
-	svc := &mockCourierService{
-		GetByIDFn: func(ctx context.Context, id int64) (*model.Courier, error) {
-			return &model.Courier{ID: id, Name: "Test"}, nil
+
+	tests := []struct {
+		name       string
+		idParam    string
+		prepareSvc func() *mockCourierService
+		wantStatus int
+	}{
+		{
+			name:    "success",
+			idParam: "5",
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					GetByIDFn: func(ctx context.Context, id int64) (*model.Courier, error) {
+						return &model.Courier{ID: id, Name: "Test"}, nil
+					},
+				}
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:    "not found",
+			idParam: "10",
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					GetByIDFn: func(ctx context.Context, id int64) (*model.Courier, error) {
+						return nil, errors.New("not found")
+					},
+				}
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid id",
+			idParam:    "xxx",
+			prepareSvc: func() *mockCourierService { return &mockCourierService{} },
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	req := httptest.NewRequest("GET", "/courier/5", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "5"}) // ВАЖНО!!!
+			log := zap.NewExample().Sugar()
+			h := handler.NewHandler(tc.prepareSvc(), log)
 
-	w := httptest.NewRecorder()
-	h.GetByID(w, req)
+			req := httptest.NewRequest("GET", "/courier/"+tc.idParam, nil)
+			req = mux.SetURLVars(req, map[string]string{"id": tc.idParam})
+			w := httptest.NewRecorder()
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
+			h.GetByID(w, req)
 
-	var resp model.Courier
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-
-	if resp.ID != 5 {
-		t.Fatalf("expected ID=5, got %d", resp.ID)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
+		})
 	}
 }
 
-func TestGetByID_NotFound(t *testing.T) {
+func TestCourierHandler_Create(t *testing.T) {
 	t.Parallel()
-	svc := &mockCourierService{
-		GetByIDFn: func(ctx context.Context, id int64) (*model.Courier, error) {
-			return nil, errors.New("not found")
+
+	tests := []struct {
+		name       string
+		body       string
+		prepareSvc func() *mockCourierService
+		wantStatus int
+	}{
+		{
+			name: "success",
+			body: `{"name":"Ivan","phone":"123","status":"available","transport_type":"car"}`,
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					CreateFn: func(ctx context.Context, c *model.Courier) error {
+						c.ID = 100
+						return nil
+					},
+				}
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "bad request",
+			body:       `{bad json}`,
+			prepareSvc: func() *mockCourierService { return &mockCourierService{} },
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "conflict",
+			body: `{"name":"A","phone":"123","status":"available","transport_type":"car"}`,
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					CreateFn: func(ctx context.Context, c *model.Courier) error {
+						return repository.ErrConflict
+					},
+				}
+			},
+			wantStatus: http.StatusConflict,
 		},
 	}
 
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	req := httptest.NewRequest("GET", "/courier/10", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "10"})
+			log := zap.NewExample().Sugar()
+			h := handler.NewHandler(tc.prepareSvc(), log)
 
-	w := httptest.NewRecorder()
-	h.GetByID(w, req)
+			req := httptest.NewRequest("POST", "/courier", bytes.NewBufferString(tc.body))
+			w := httptest.NewRecorder()
 
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
+			h.Create(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
+		})
 	}
 }
 
-func TestGetAll_Success(t *testing.T) {
+func TestCourierHandler_GetAll(t *testing.T) {
 	t.Parallel()
-	svc := &mockCourierService{
-		GetAllFn: func(ctx context.Context) ([]*model.Courier, error) {
-			return []*model.Courier{
-				{ID: 1, Name: "A"},
-				{ID: 2, Name: "B"},
-			}, nil
+
+	tests := []struct {
+		name       string
+		prepareSvc func() *mockCourierService
+		wantStatus int
+		wantLen    int
+	}{
+		{
+			name: "success",
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					GetAllFn: func(ctx context.Context) ([]*model.Courier, error) {
+						return []*model.Courier{
+							{ID: 1, Name: "A"},
+							{ID: 2, Name: "B"},
+						}, nil
+					},
+				}
+			},
+			wantStatus: http.StatusOK,
+			wantLen:    2,
+		},
+		{
+			name: "internal error",
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					GetAllFn: func(ctx context.Context) ([]*model.Courier, error) {
+						return nil, errors.New("db error")
+					},
+				}
+			},
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	req := httptest.NewRequest("GET", "/couriers", nil)
-	w := httptest.NewRecorder()
+			h := handler.NewHandler(tc.prepareSvc(), zap.NewExample().Sugar())
+			req := httptest.NewRequest("GET", "/couriers", nil)
+			w := httptest.NewRecorder()
 
-	h.GetAll(w, req)
+			h.GetAll(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
 
-	var resp []model.Courier
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-
-	if len(resp) != 2 {
-		t.Fatalf("expected 2 couriers, got %d", len(resp))
+			if tc.wantLen > 0 {
+				var resp []model.Courier
+				_ = json.Unmarshal(w.Body.Bytes(), &resp)
+				if len(resp) != tc.wantLen {
+					t.Fatalf("expected %d, got %d", tc.wantLen, len(resp))
+				}
+			}
+		})
 	}
 }
 
-func TestCreate_Success(t *testing.T) {
+func TestCourierHandler_Update(t *testing.T) {
 	t.Parallel()
-	svc := &mockCourierService{
-		CreateFn: func(ctx context.Context, c *model.Courier) error {
-			c.ID = 100
-			return nil
+
+	tests := []struct {
+		name       string
+		body       string
+		prepareSvc func() *mockCourierService
+		wantStatus int
+	}{
+		{
+			name: "success",
+			body: `{"id":7,"name":"Updated"}`,
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					UpdateFn: func(ctx context.Context, c *model.Courier) error {
+						return nil
+					},
+				}
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "not found",
+			body: `{"id":7}`,
+			prepareSvc: func() *mockCourierService {
+				return &mockCourierService{
+					UpdateFn: func(ctx context.Context, c *model.Courier) error {
+						return errors.New("not found")
+					},
+				}
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "bad request",
+			body:       `{bad json}`,
+			prepareSvc: func() *mockCourierService { return &mockCourierService{} },
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	body := []byte(`{"name":"Ivan","phone":"123","status":"available","transport_type":"car"}`)
+			h := handler.NewHandler(tc.prepareSvc(), zap.NewExample().Sugar())
+			req := httptest.NewRequest("PUT", "/courier", bytes.NewBufferString(tc.body))
+			w := httptest.NewRecorder()
 
-	req := httptest.NewRequest("POST", "/courier", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
+			h.Update(w, req)
 
-	h.Create(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var resp model.Courier
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-
-	if resp.ID != 100 {
-		t.Fatalf("expected ID=100, got %d", resp.ID)
-	}
-}
-
-func TestCreate_BadRequest(t *testing.T) {
-	t.Parallel()
-	svc := &mockCourierService{}
-
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	req := httptest.NewRequest("POST", "/courier", bytes.NewBuffer([]byte(`{bad json}`)))
-	w := httptest.NewRecorder()
-
-	h.Create(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestUpdate_Success(t *testing.T) {
-	t.Parallel()
-	svc := &mockCourierService{
-		UpdateFn: func(ctx context.Context, c *model.Courier) error { return nil },
-	}
-
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	body := []byte(`{"id":7,"name":"Updated"}`)
-
-	req := httptest.NewRequest("PUT", "/courier", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	h.Update(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-}
-
-func TestUpdate_NotFound(t *testing.T) {
-	t.Parallel()
-	svc := &mockCourierService{
-		UpdateFn: func(ctx context.Context, c *model.Courier) error {
-			return errors.New("not found")
-		},
-	}
-
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	body := []byte(`{"id":7}`)
-
-	req := httptest.NewRequest("PUT", "/courier", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	h.Update(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
+		})
 	}
 }
 
@@ -246,85 +311,5 @@ func TestHealthCheck(t *testing.T) {
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
-	}
-}
-
-func TestGetByID_InvalidID(t *testing.T) {
-	t.Parallel()
-
-	svc := &mockCourierService{}
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	req := httptest.NewRequest("GET", "/courier/xxx", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "xxx"})
-	w := httptest.NewRecorder()
-
-	h.GetByID(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestGetAll_Error(t *testing.T) {
-	t.Parallel()
-
-	svc := &mockCourierService{
-		GetAllFn: func(ctx context.Context) ([]*model.Courier, error) {
-			return nil, errors.New("db error")
-		},
-	}
-
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	req := httptest.NewRequest("GET", "/couriers", nil)
-	w := httptest.NewRecorder()
-
-	h.GetAll(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestUpdate_BadRequest(t *testing.T) {
-	t.Parallel()
-
-	svc := &mockCourierService{}
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	req := httptest.NewRequest("PUT", "/courier", bytes.NewBuffer([]byte(`{bad json}`)))
-	w := httptest.NewRecorder()
-
-	h.Update(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestCreate_Conflict(t *testing.T) {
-	t.Parallel()
-
-	svc := &mockCourierService{
-		CreateFn: func(ctx context.Context, c *model.Courier) error {
-			return repository.ErrConflict // ВАЖНО!!!
-		},
-	}
-
-	log := zap.NewExample().Sugar()
-	h := handler.NewHandler(svc, log)
-
-	req := httptest.NewRequest("POST", "/courier",
-		bytes.NewBufferString(`{"name":"A","phone":"123","status":"available","transport_type":"car"}`))
-	w := httptest.NewRecorder()
-
-	h.Create(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d", w.Code)
 	}
 }
