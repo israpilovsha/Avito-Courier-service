@@ -1,26 +1,18 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
-	courierModel "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/model"
-	deliveryModel "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/model"
 	"go.uber.org/zap"
 )
 
-type DeliveryService interface {
-	Assign(ctx context.Context, orderID string) (*deliveryModel.Delivery, *courierModel.Courier, error)
-	Unassign(ctx context.Context, orderID string) (*deliveryModel.Delivery, error)
-}
-
 type Handler struct {
-	svc DeliveryService
+	svc deliveryService
 	log *zap.SugaredLogger
 }
 
-func NewHandler(s DeliveryService, log *zap.SugaredLogger) *Handler {
+func NewHandler(s deliveryService, log *zap.SugaredLogger) *Handler {
 	return &Handler{svc: s, log: log}
 }
 
