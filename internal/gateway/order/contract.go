@@ -12,4 +12,5 @@ type Order struct {
 
 type Gateway interface {
 	FetchOrders(ctx context.Context, from time.Time) ([]Order, error)
+	GetStatus(ctx context.Context, id string) (string, error)
 }

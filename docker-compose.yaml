@@ -29,7 +29,27 @@ services:
       - DELIVERY_TICKER_INTERVAL=${DELIVERY_TICKER_INTERVAL}
     networks:
       - infrastructure_default
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: courier-prometheus
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - service-courier
+    networks:
+      - infrastructure_default
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: courier-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - infrastructure_default
 volumes:
   pgdata:   
 

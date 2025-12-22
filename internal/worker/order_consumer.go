@@ -4,20 +4,27 @@ import (
 	"encoding/json"
 
 	"github.com/IBM/sarama"
-	"go.uber.org/zap"
 )
 
 type OrderConsumer struct {
-	log       *zap.SugaredLogger
+	log       Logger
 	processor *OrderEventProcessor
 }
 
-func NewOrderConsumer(p *OrderEventProcessor, log *zap.SugaredLogger) *OrderConsumer {
-	return &OrderConsumer{processor: p, log: log}
+func NewOrderConsumer(p *OrderEventProcessor, log Logger) *OrderConsumer {
+	return &OrderConsumer{
+		processor: p,
+		log:       log,
+	}
 }
 
-func (c *OrderConsumer) Setup(sarama.ConsumerGroupSession) error   { return nil }
-func (c *OrderConsumer) Cleanup(sarama.ConsumerGroupSession) error { return nil }
+func (c *OrderConsumer) Setup(sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+func (c *OrderConsumer) Cleanup(sarama.ConsumerGroupSession) error {
+	return nil
+}
 
 func (c *OrderConsumer) ConsumeClaim(
 	session sarama.ConsumerGroupSession,

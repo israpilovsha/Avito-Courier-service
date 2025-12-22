@@ -11,6 +11,7 @@ import (
 	courierHandler "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/handler"
 	courierRepo "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/repository"
 	courierUsecase "github.com/Avito-courses/course-go-avito-israpilovsha/internal/courier/usecase"
+	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/gateway/order"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/metrics"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/middleware"
 	"github.com/IBM/sarama"
@@ -68,7 +69,6 @@ func main() {
 	defer stop()
 
 	go deliveryService.StartAutoRelease(ctx, cfg.Delivery.TickerInterval)
-	log.Info("Background auto-release task started")
 
 	if cfg.Kafka.Enabled {
 		kafkaCfg := sarama.NewConfig()
@@ -84,31 +84,42 @@ func main() {
 			log.Fatal("Kafka consumer group init failed", zap.Error(err))
 		}
 
+		orderGateway := order.NewHTTPGateway(cfg.OrderServiceHost)
+
 		processor := worker.NewOrderEventProcessor(
 			deliveryService,
+			deliveryService,
 			completeService,
+			orderGateway,
 		)
 
 		consumer := worker.NewOrderConsumer(processor, log)
 
+		consumerCtx, consumerCancel := context.WithCancel(context.Background())
+
+		go func() {
+			<-ctx.Done()
+			consumerCancel()
+		}()
+
 		go func() {
 			defer group.Close()
+
 			for {
-				if err := group.Consume(ctx, []string{cfg.Kafka.Topic}, consumer); err != nil {
+				if err := group.Consume(consumerCtx, []string{cfg.Kafka.Topic}, consumer); err != nil {
 					log.Error("Kafka consume error", zap.Error(err))
-					time.Sleep(time.Second)
+					select {
+					case <-time.After(time.Second):
+					case <-consumerCtx.Done():
+						return
+					}
 				}
-				if ctx.Err() != nil {
+
+				if consumerCtx.Err() != nil {
 					return
 				}
 			}
 		}()
-
-		log.Info("Kafka consumer started",
-			zap.Strings("brokers", cfg.Kafka.Brokers),
-			zap.String("topic", cfg.Kafka.Topic),
-			zap.String("group", cfg.Kafka.GroupID),
-		)
 	}
 
 	srv := &http.Server{
@@ -117,21 +128,15 @@ func main() {
 	}
 
 	go func() {
-		log.Info("Server is starting...", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Server failed", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
-	log.Info("Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatal("Server shutdown failed", zap.Error(err))
-	}
-
-	log.Info("Server stopped gracefully")
+	_ = srv.Shutdown(shutdownCtx)
 }
