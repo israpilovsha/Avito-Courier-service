@@ -8,10 +8,10 @@ import (
 
 type OrderConsumer struct {
 	log       Logger
-	processor *OrderEventProcessor
+	processor OrderProcessor
 }
 
-func NewOrderConsumer(p *OrderEventProcessor, log Logger) *OrderConsumer {
+func NewOrderConsumer(p OrderProcessor, log Logger) *OrderConsumer {
 	return &OrderConsumer{
 		processor: p,
 		log:       log,
