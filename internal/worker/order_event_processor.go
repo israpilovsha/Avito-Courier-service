@@ -2,8 +2,8 @@ package worker
 
 import (
 	"context"
-	"strings"
 
+	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/model"
 	deliveryUsecase "github.com/Avito-courses/course-go-avito-israpilovsha/internal/delivery/usecase"
 	"github.com/Avito-courses/course-go-avito-israpilovsha/internal/gateway/order"
 )
@@ -30,22 +30,24 @@ func NewOrderEventProcessor(
 }
 
 func (p *OrderEventProcessor) Process(ctx context.Context, ev OrderEvent) error {
-	actualStatus, err := p.orders.GetStatus(ctx, ev.OrderID)
+	rawStatus, err := p.orders.GetStatus(ctx, ev.OrderID)
 	if err != nil {
 		return err
 	}
 
-	switch strings.ToLower(actualStatus) {
+	status := model.ParseOrderStatus(rawStatus)
 
-	case "created":
+	switch status {
+
+	case model.OrderStatusCreated:
 		_, _, err := p.assign.Assign(ctx, ev.OrderID)
 		return err
 
-	case "cancelled", "canceled":
+	case model.OrderStatusCancelled:
 		_, err := p.unassign.Unassign(ctx, ev.OrderID)
 		return err
 
-	case "completed":
+	case model.OrderStatusCompleted:
 		return p.complete.Complete(ctx, ev.OrderID)
 
 	default:
