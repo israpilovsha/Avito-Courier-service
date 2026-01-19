@@ -70,6 +70,7 @@ func main() {
 
 	go deliveryService.StartAutoRelease(ctx, cfg.Delivery.TickerInterval)
 
+	// Kafka consumer
 	if cfg.Kafka.Enabled {
 		kafkaCfg := sarama.NewConfig()
 		kafkaCfg.Version = sarama.V2_6_0_0
@@ -93,33 +94,17 @@ func main() {
 			orderGateway,
 		)
 
-		consumer := worker.NewOrderConsumer(processor, log)
+		handler := worker.NewOrderConsumer(processor, log)
 
-		consumerCtx, consumerCancel := context.WithCancel(context.Background())
+		consumer := worker.NewKafkaConsumer(
+			group,
+			cfg.Kafka.Topic,
+			handler,
+			log,
+		)
 
-		go func() {
-			<-ctx.Done()
-			consumerCancel()
-		}()
-
-		go func() {
-			defer group.Close()
-
-			for {
-				if err := group.Consume(consumerCtx, []string{cfg.Kafka.Topic}, consumer); err != nil {
-					log.Error("Kafka consume error", zap.Error(err))
-					select {
-					case <-time.After(time.Second):
-					case <-consumerCtx.Done():
-						return
-					}
-				}
-
-				if consumerCtx.Err() != nil {
-					return
-				}
-			}
-		}()
+		consumer.Start(ctx)
+		log.Info("Kafka consumer started")
 	}
 
 	srv := &http.Server{
