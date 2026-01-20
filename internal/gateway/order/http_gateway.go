@@ -37,6 +37,7 @@ func (g *httpGateway) FetchOrders(ctx context.Context, from time.Time) ([]Order,
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Bypass-Auth", "true")
 
 	resp, err := g.client.Do(req)
 	if err != nil {
@@ -62,12 +63,14 @@ func (g *httpGateway) GetStatus(ctx context.Context, id string) (string, error) 
 		return "", err
 	}
 
-	u.Path = fmt.Sprintf("/public/api/v1/orders/%s/status", id)
+	u.Path = fmt.Sprintf("/public/api/v1/order/%s/status", id)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Bypass-Auth", "true")
 
 	resp, err := g.client.Do(req)
 	if err != nil {
@@ -80,7 +83,8 @@ func (g *httpGateway) GetStatus(ctx context.Context, id string) (string, error) 
 	}
 
 	var res struct {
-		Status string `json:"status"`
+		OrderID string `json:"order_id"`
+		Status  string `json:"status"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return "", err

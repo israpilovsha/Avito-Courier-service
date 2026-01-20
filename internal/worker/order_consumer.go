@@ -37,7 +37,7 @@ func (c *OrderConsumer) ConsumeClaim(
 			session.MarkMessage(msg, "")
 			continue
 		}
-
+		c.log.Warnw("Received Kafka message", "value", string(msg.Value))
 		if err := c.processor.Process(session.Context(), ev); err != nil {
 			c.log.Errorw("order event failed", "order", ev.OrderID, "err", err)
 			continue
