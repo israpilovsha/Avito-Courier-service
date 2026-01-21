@@ -76,7 +76,7 @@ func (g *httpGateway) FetchOrders(ctx context.Context, from time.Time) ([]Order,
 		req.Header.Set("X-Bypass-Auth", "true")
 		return g.client.Do(req)
 	}, func(resp *http.Response) error {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			return fmt.Errorf("%w: status %s", errRetryableHTTP, resp.Status)
@@ -116,7 +116,7 @@ func (g *httpGateway) GetStatus(ctx context.Context, id string) (string, error) 
 		req.Header.Set("X-Bypass-Auth", "true")
 		return g.client.Do(req)
 	}, func(resp *http.Response) error {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			return fmt.Errorf("%w: status %s", errRetryableHTTP, resp.Status)
@@ -193,31 +193,6 @@ func (g *httpGateway) doWithRetry(
 	return lastErr
 }
 
-func shouldRetryByHTTPError(err error) bool {
-	msg := err.Error()
-	if contains(msg, "429") || contains(msg, "Too Many Requests") {
-		return true
-	}
-
-	if contains(msg, " 5") {
-		return true
-	}
-	return false
-}
-
-func contains(s, sub string) bool {
-	return len(sub) > 0 && (len(s) >= len(sub)) && (stringIndex(s, sub) >= 0)
-}
-
-func stringIndex(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
 func isRetryableNetErr(err error) bool {
 	if err == nil {
 		return false
@@ -228,8 +203,10 @@ func isRetryableNetErr(err error) bool {
 	}
 
 	var nerr net.Error
-	if errors.As(err, &nerr) && (nerr.Timeout() || nerr.Temporary()) {
-		return true
+	if errors.As(err, &nerr) {
+		if nerr.Timeout() {
+			return true
+		}
 	}
 
 	if errors.Is(err, io.EOF) {

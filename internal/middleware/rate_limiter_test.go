@@ -12,10 +12,10 @@ import (
 )
 
 func TestRateLimit_AllowsFirstRequest_ThenRejectsSecond_AndIncrementsMetric(t *testing.T) {
-	metrics.RateLimitExceededTotal.Add(-testutil.ToFloat64(metrics.RateLimitExceededTotal))
-
 	log := zap.NewNop().Sugar()
 	bucket := NewTokenBucket(1)
+
+	before := testutil.ToFloat64(metrics.RateLimitExceededTotal)
 
 	h := RateLimit(bucket, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -31,7 +31,6 @@ func TestRateLimit_AllowsFirstRequest_ThenRejectsSecond_AndIncrementsMetric(t *t
 	}
 	_, _ = io.Copy(io.Discard, resp1.Body)
 	_ = resp1.Body.Close()
-
 	if resp1.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 for first request, got %d", resp1.StatusCode)
 	}
@@ -50,17 +49,17 @@ func TestRateLimit_AllowsFirstRequest_ThenRejectsSecond_AndIncrementsMetric(t *t
 		t.Fatalf("expected Retry-After=1, got %q", ra)
 	}
 
-	exceeded := testutil.ToFloat64(metrics.RateLimitExceededTotal)
-	if exceeded != 1 {
-		t.Fatalf("expected rate_limit_exceeded_total=1, got %v", exceeded)
+	after := testutil.ToFloat64(metrics.RateLimitExceededTotal)
+	if after-before != 1 {
+		t.Fatalf("expected metric delta=1, got %v", after-before)
 	}
 }
 
 func TestRateLimit_DoesNotIncrementMetric_WhenUnderLimit(t *testing.T) {
-	metrics.RateLimitExceededTotal.Add(-testutil.ToFloat64(metrics.RateLimitExceededTotal))
-
 	log := zap.NewNop().Sugar()
 	bucket := NewTokenBucket(5)
+
+	before := testutil.ToFloat64(metrics.RateLimitExceededTotal)
 
 	h := RateLimit(bucket, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -80,8 +79,8 @@ func TestRateLimit_DoesNotIncrementMetric_WhenUnderLimit(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	exceeded := testutil.ToFloat64(metrics.RateLimitExceededTotal)
-	if exceeded != 0 {
-		t.Fatalf("expected rate_limit_exceeded_total=0, got %v", exceeded)
+	after := testutil.ToFloat64(metrics.RateLimitExceededTotal)
+	if after-before != 0 {
+		t.Fatalf("expected metric delta=0, got %v", after-before)
 	}
 }

@@ -21,7 +21,6 @@ func (l *testLogger) Warnw(msg string, keysAndValues ...any) {
 }
 
 func TestGateway_RetryOn429_IncrementsMetricAndEventuallySucceeds(t *testing.T) {
-	metrics.GatewayRetriesTotal.Add(-testutil.ToFloat64(metrics.GatewayRetriesTotal))
 
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +65,7 @@ func TestGateway_RetryOn429_IncrementsMetricAndEventuallySucceeds(t *testing.T) 
 }
 
 func TestGateway_NoRetryOn400(t *testing.T) {
-	metrics.GatewayRetriesTotal.Add(-testutil.ToFloat64(metrics.GatewayRetriesTotal))
+	before := testutil.ToFloat64(metrics.GatewayRetriesTotal)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -84,14 +83,13 @@ func TestGateway_NoRetryOn400(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	retries := testutil.ToFloat64(metrics.GatewayRetriesTotal)
-	if retries != 0 {
-		t.Fatalf("expected retries=0, got %v", retries)
+	after := testutil.ToFloat64(metrics.GatewayRetriesTotal)
+	if after-before != 0 {
+		t.Fatalf("expected retries delta=0, got %v", after-before)
 	}
 }
 
 func TestGateway_RetryOnNetworkError(t *testing.T) {
-	metrics.GatewayRetriesTotal.Add(-testutil.ToFloat64(metrics.GatewayRetriesTotal))
 
 	gw := NewHTTPGateway("http://127.0.0.1:1")
 	hg := gw.(*httpGateway)
@@ -110,7 +108,6 @@ func TestGateway_RetryOnNetworkError(t *testing.T) {
 }
 
 func TestGateway_FetchOrders_RetryAndDecode(t *testing.T) {
-	metrics.GatewayRetriesTotal.Add(-testutil.ToFloat64(metrics.GatewayRetriesTotal))
 
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

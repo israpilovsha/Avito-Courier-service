@@ -1,13 +1,21 @@
+version: 2
+
 run:
   timeout: 3m
+  tests: true
+
 linters:
   enable:
     - govet
     - staticcheck
-    - gofmt
-    - goimports
     - errcheck
     - unused
     - gocritic
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 issues:
   exclude-use-default: false

@@ -30,8 +30,8 @@ import (
 
 func main() {
 	log := logger.New()
-	defer log.Sync()
-
+	defer func() { _ = log.Sync() }()
+	v := 1
 	cfg := config.MustLoad()
 	log.Info("Configuration loaded", zap.String("port", cfg.Port))
 
@@ -86,29 +86,30 @@ func main() {
 			kafkaCfg,
 		)
 		if err != nil {
-			log.Fatal("Kafka consumer group init failed", zap.Error(err))
+			log.Error("Kafka consumer group init failed", zap.Error(err))
+			stop()
+		} else {
+			orderGateway := order.WithLogger(order.NewHTTPGateway(cfg.OrderServiceHost), log)
+
+			processor := worker.NewOrderEventProcessor(
+				deliveryService,
+				deliveryService,
+				completeService,
+				orderGateway,
+			)
+
+			handler := worker.NewOrderConsumer(processor, log)
+
+			consumer := worker.NewKafkaConsumer(
+				group,
+				cfg.Kafka.Topic,
+				handler,
+				log,
+			)
+
+			consumer.Start(ctx)
+			log.Info("Kafka consumer started")
 		}
-
-		orderGateway := order.WithLogger(order.NewHTTPGateway(cfg.OrderServiceHost), log)
-
-		processor := worker.NewOrderEventProcessor(
-			deliveryService,
-			deliveryService,
-			completeService,
-			orderGateway,
-		)
-
-		handler := worker.NewOrderConsumer(processor, log)
-
-		consumer := worker.NewKafkaConsumer(
-			group,
-			cfg.Kafka.Topic,
-			handler,
-			log,
-		)
-
-		consumer.Start(ctx)
-		log.Info("Kafka consumer started")
 	}
 
 	srv := &http.Server{
