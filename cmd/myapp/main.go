@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os/signal"
 	"syscall"
 	"time"
@@ -115,6 +117,29 @@ func main() {
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
+	}
+
+	pprofLn, err := net.Listen("tcp", "127.0.0.1:6060")
+	if err != nil {
+		log.Warn("pprof listen failed", zap.Error(err))
+	} else {
+		pprofSrv := &http.Server{
+			Handler: http.DefaultServeMux,
+		}
+
+		go func() {
+			log.Info("pprof server started", zap.String("addr", pprofLn.Addr().String()))
+			if err := pprofSrv.Serve(pprofLn); err != nil && err != http.ErrServerClosed {
+				log.Warn("pprof server error", zap.Error(err))
+			}
+		}()
+
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = pprofSrv.Shutdown(shutdownCtx)
+		}()
 	}
 
 	go func() {
