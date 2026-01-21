@@ -26,5 +26,9 @@ jobs:
           version: v2.8.0
           args: --timeout=3m ./...
 
+      - name: Build all packages
+        run: go build ./...
+
+
       - name: Run tests
-        run: go test ./... -v
+        run: go test ./... -v 
