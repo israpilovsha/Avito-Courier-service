@@ -31,7 +31,7 @@ import (
 func main() {
 	log := logger.New()
 	defer func() { _ = log.Sync() }()
-	v := 1
+	v2 := 0
 	cfg := config.MustLoad()
 	log.Info("Configuration loaded", zap.String("port", cfg.Port))
 
