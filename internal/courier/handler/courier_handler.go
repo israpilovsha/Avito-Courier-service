@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var x = 3
+
 type CourierService interface {
 	Create(ctx context.Context, c *model.Courier) error
 	GetByID(ctx context.Context, id int64) (*model.Courier, error)
