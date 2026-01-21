@@ -61,6 +61,10 @@ func main() {
 	r := mux.NewRouter()
 	r.Use(middleware.MetricsAndLogging(log))
 
+	// rate limiter
+	bucket := middleware.NewTokenBucket(5)
+	r.Use(middleware.RateLimit(bucket, log))
+
 	r.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	courierHandler.RegisterCourierRoutes(r, courierH)
 	deliveryHandler.RegisterDeliveryRoutes(r, deliveryH)
@@ -85,7 +89,7 @@ func main() {
 			log.Fatal("Kafka consumer group init failed", zap.Error(err))
 		}
 
-		orderGateway := order.NewHTTPGateway(cfg.OrderServiceHost)
+		orderGateway := order.WithLogger(order.NewHTTPGateway(cfg.OrderServiceHost), log)
 
 		processor := worker.NewOrderEventProcessor(
 			deliveryService,

@@ -26,4 +26,7 @@ var (
 func Register() {
 	prometheus.MustRegister(HttpRequestsTotal)
 	prometheus.MustRegister(HttpRequestDuration)
+
+	prometheus.MustRegister(RateLimitExceededTotal)
+	prometheus.MustRegister(GatewayRetriesTotal)
 }
