@@ -2,7 +2,7 @@ name: Go CI
 
 on:
   push:
-    branches: [ main, homewrok10-12 ]
+    branches: [ main, homework10-12 ]
   pull_request:
     branches: [ main ]
 
