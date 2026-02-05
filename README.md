@@ -52,9 +52,6 @@ db/ // работа с БД
 pkg/
 logger/ // логгер
 
-yaml
-Копировать код
-
 ---
 
 ## 🛠 Технологии
@@ -73,39 +70,18 @@ yaml
 
 Используется файл `.env`:
 
-```env
-POSTGRES_USER=...
-POSTGRES_PASSWORD=...
-POSTGRES_HOST=...
-POSTGRES_PORT=5432
-POSTGRES_DB=...
-
-KAFKA_ENABLED=true
-KAFKA_BROKERS=localhost:9092
-KAFKA_TOPIC=order.status.changed
-KAFKA_GROUP_ID=courier-service
 ▶️ Запуск приложения
-bash
-Копировать код
 make run
 🗄 Миграции БД
-bash
-Копировать код
 make migrate          # применить миграции
 make migrate-down     # откатить последнюю миграцию
 make migrate-status   # статус миграций
 🧪 Тесты
-bash
-Копировать код
 go test ./... -v
 🧹 Линтинг
-bash
-Копировать код
 golangci-lint run ./...
 или через Makefile (если добавлено):
 
-bash
-Копировать код
 make lint
 📊 Метрики и мониторинг
 Prometheus
@@ -134,13 +110,9 @@ Gateway retries
 🧠 Профилирование (pprof)
 Отдельный HTTP-сервер (только localhost):
 
-ruby
-Копировать код
 http://127.0.0.1:6060/debug/pprof/
 Примеры:
 
-bash
-Копировать код
 go tool pprof http://localhost:6060/debug/pprof/profile?seconds=10
 go tool pprof http://localhost:6060/debug/pprof/heap
 🔐 Безопасность
