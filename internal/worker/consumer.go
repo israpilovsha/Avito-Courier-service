@@ -31,7 +31,7 @@ func NewKafkaConsumer(
 
 func (c *KafkaConsumer) Start(ctx context.Context) {
 	go func() {
-		defer c.group.Close()
+		defer func() { _ = c.group.Close() }()
 
 		for {
 			if err := c.group.Consume(ctx, []string{c.topic}, c.handler); err != nil {

@@ -3,7 +3,7 @@ export
 
 DATABASE_URL := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
-.PHONY: migrate migrate-down migrate-status run build
+.PHONY: migrate migrate-down migrate-status run build lint test fmt check
 
 migrate:
 	@echo "Running migrations..."
@@ -22,3 +22,13 @@ run:
 
 build:
 	go build -o myapp ./cmd/myapp	
+
+lint:
+	@echo "Running golangci-lint"
+	golangci-lint run ./...
+	@echo "Lint passsed succesfully"
+
+test:
+	@echo "Running tests"
+	go test ./... -v
+

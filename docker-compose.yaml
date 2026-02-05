@@ -27,13 +27,17 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - DELIVERY_TICKER_INTERVAL=${DELIVERY_TICKER_INTERVAL}
+      - KAFKA_ENABLED=true
+      - KAFKA_BROKERS=kafka:${KAFKA_CLIENT_PORT}
+      - KAFKA_TOPIC=${KAFKA_TOPIC}
+      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID}
     networks:
       - infrastructure_default
   prometheus:
     image: prom/prometheus:latest
     container_name: courier-prometheus
     volumes:
-      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     depends_on:

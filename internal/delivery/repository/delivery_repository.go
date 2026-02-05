@@ -30,7 +30,7 @@ func (r *DeliveryPostgresRepository) WithTx(ctx context.Context, fn func(txCtx c
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	txCtx := context.WithValue(ctx, txKey, tx)
 

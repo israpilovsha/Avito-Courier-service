@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os/signal"
 	"syscall"
 	"time"
@@ -30,7 +32,7 @@ import (
 
 func main() {
 	log := logger.New()
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 
 	cfg := config.MustLoad()
 	log.Info("Configuration loaded", zap.String("port", cfg.Port))
@@ -61,6 +63,10 @@ func main() {
 	r := mux.NewRouter()
 	r.Use(middleware.MetricsAndLogging(log))
 
+	// rate limiter
+	bucket := middleware.NewTokenBucket(5)
+	r.Use(middleware.RateLimit(bucket, log))
+
 	r.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	courierHandler.RegisterCourierRoutes(r, courierH)
 	deliveryHandler.RegisterDeliveryRoutes(r, deliveryH)
@@ -82,34 +88,58 @@ func main() {
 			kafkaCfg,
 		)
 		if err != nil {
-			log.Fatal("Kafka consumer group init failed", zap.Error(err))
+			log.Error("Kafka consumer group init failed", zap.Error(err))
+			stop()
+		} else {
+			orderGateway := order.WithLogger(order.NewHTTPGateway(cfg.OrderServiceHost), log)
+
+			processor := worker.NewOrderEventProcessor(
+				deliveryService,
+				deliveryService,
+				completeService,
+				orderGateway,
+			)
+
+			handler := worker.NewOrderConsumer(processor, log)
+
+			consumer := worker.NewKafkaConsumer(
+				group,
+				cfg.Kafka.Topic,
+				handler,
+				log,
+			)
+
+			consumer.Start(ctx)
+			log.Info("Kafka consumer started")
 		}
-
-		orderGateway := order.NewHTTPGateway(cfg.OrderServiceHost)
-
-		processor := worker.NewOrderEventProcessor(
-			deliveryService,
-			deliveryService,
-			completeService,
-			orderGateway,
-		)
-
-		handler := worker.NewOrderConsumer(processor, log)
-
-		consumer := worker.NewKafkaConsumer(
-			group,
-			cfg.Kafka.Topic,
-			handler,
-			log,
-		)
-
-		consumer.Start(ctx)
-		log.Info("Kafka consumer started")
 	}
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
+	}
+
+	pprofLn, err := net.Listen("tcp", "127.0.0.1:6060")
+	if err != nil {
+		log.Warn("pprof listen failed", zap.Error(err))
+	} else {
+		pprofSrv := &http.Server{
+			Handler: http.DefaultServeMux,
+		}
+
+		go func() {
+			log.Info("pprof server started", zap.String("addr", pprofLn.Addr().String()))
+			if err := pprofSrv.Serve(pprofLn); err != nil && err != http.ErrServerClosed {
+				log.Warn("pprof server error", zap.Error(err))
+			}
+		}()
+
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = pprofSrv.Shutdown(shutdownCtx)
+		}()
 	}
 
 	go func() {
