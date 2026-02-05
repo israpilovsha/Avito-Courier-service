@@ -71,8 +71,11 @@ logger/ // логгер
 Используется файл `.env`:
 
 ▶️ Запуск приложения
+
 make run
+
 🗄 Миграции БД
+
 make migrate          # применить миграции
 make migrate-down     # откатить последнюю миграцию
 make migrate-status   # статус миграций
@@ -111,10 +114,12 @@ Gateway retries
 Отдельный HTTP-сервер (только localhost):
 
 http://127.0.0.1:6060/debug/pprof/
+
 Примеры:
 
 go tool pprof http://localhost:6060/debug/pprof/profile?seconds=10
 go tool pprof http://localhost:6060/debug/pprof/heap
+
 🔐 Безопасность
 pprof доступен только с localhost
 
